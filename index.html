@@ -1,0 +1,1313 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="دفتر مالي شخصي مشفّر بكلمة مرور. يعمل على الهاتف والكمبيوتر، ويمكن تثبيته كتطبيق.">
+<meta name="theme-color" content="#f5f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#11161d" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="دفتر المال">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>دفتر المال</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
+<style>
+/* A bookkeeper's ledger. The net balance is a ruled total at the top, entries are hairline rows, and the charts restate the same figures. Two columns from 960px: figures and entry on the left; charts, ledger and settings on the right. */
+:root{
+  --paper:#f5f5f2;--surface:#fcfcfb;--ink:#1c1f24;--ink-2:#4c5159;--mute:#60646b;
+  --rule:#d9d8d2;--rule-strong:#1c1f24;--grid:#e1e0d9;--axis:#c3c2b7;
+  --accent:#8a6420;--accent-ink:#fffdf7;
+  --income:#0f7a5a;--expense:#b3392b;--bad-bg:#f6e3df;
+  --s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--s6:#008300;--s7:#6250d6;--s8:#e34948;--sx:#898781;
+  --f-display:"Amiri","Noto Naskh Arabic",Georgia,serif;
+  --f-ui:"IBM Plex Sans Arabic","Segoe UI",Tahoma,system-ui,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#11161d;--surface:#161d27;--ink:#e9edf2;--ink-2:#b8c0cc;--mute:#9aa3b1;
+    --rule:#2a3442;--rule-strong:#e9edf2;--grid:#262f3c;--axis:#38424f;
+    --accent:#d9ad5e;--accent-ink:#1d1505;
+    --income:#4cc79c;--expense:#f08c7b;--bad-bg:#3a1f1b;
+    --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#008300;--s7:#9085e9;--s8:#e66767;--sx:#8d97a6;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#11161d;--surface:#161d27;--ink:#e9edf2;--ink-2:#b8c0cc;--mute:#9aa3b1;
+  --rule:#2a3442;--rule-strong:#e9edf2;--grid:#262f3c;--axis:#38424f;
+  --accent:#d9ad5e;--accent-ink:#1d1505;
+  --income:#4cc79c;--expense:#f08c7b;--bad-bg:#3a1f1b;
+  --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#008300;--s7:#9085e9;--s8:#e66767;--sx:#8d97a6;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 15px/1.7 var(--f-ui);padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));overflow-wrap:break-word}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+p,ul,dl,dd,dt,h1,h2,h3{margin:0}
+h2{font:600 16px/1.4 var(--f-ui)}
+h3{font:600 14px/1.4 var(--f-ui);margin-bottom:8px}
+.app{max-width:1120px;margin-inline:auto}
+.mast{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:12px}
+.brand{font:700 30px/1.2 var(--f-display)}
+.lbl{font-size:13px;color:var(--mute)}
+.hint{font-size:13px;color:var(--mute);margin-top:6px}
+.msg{min-height:1.5em;margin-top:8px;font-size:14px}
+.msg.err{color:var(--expense)}
+.msg.ok{color:var(--income)}
+.num{font-variant-numeric:tabular-nums}
+.ltr{direction:ltr;unicode-bidi:isolate}
+.layout{display:grid;gap:28px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:960px){.layout{grid-template-columns:minmax(0,5fr) minmax(0,6fr);align-items:start;gap:44px}}
+.col{min-width:0}
+.balance{border-bottom:4px double var(--rule-strong);padding-bottom:18px}
+.balance-num{font:700 clamp(38px,9vw,54px)/1.1 var(--f-display);margin:6px 0 6px;direction:ltr;text-align:right;white-space:nowrap;font-variant-numeric:lining-nums}
+.totals{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-top:18px}
+.totals dd{margin-top:4px}
+.accounts{margin-bottom:16px}
+.acc-bar{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+.acc-tabs{display:flex;gap:8px;overflow-x:auto;min-width:0;flex:1 1 auto;padding:2px 2px 6px}
+.acc-tabs button{flex:0 0 auto;max-width:70vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:42px;padding:8px 16px;border-radius:999px;border:1px solid var(--rule);background:var(--surface);color:var(--ink-2);font:600 14px var(--f-ui);cursor:pointer}
+.acc-tabs button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.acc-add{flex:0 0 42px;width:42px;min-height:42px;padding:0;border-radius:999px;border:1px solid var(--accent);background:transparent;color:var(--accent);font:700 22px/1 var(--f-ui);cursor:pointer}
+.acc-form{margin-bottom:16px;padding:12px;border:1px solid var(--rule);border-radius:10px;background:var(--surface)}
+.acc-new{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.acc-new input{flex:1 1 180px}
+#renName{flex-basis:100%}
+.acc-acts{display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:6px}
+#accDelMsg:empty{display:none}
+.amt{display:block;font:600 22px/1.3 var(--f-ui);direction:ltr;text-align:right;font-variant-numeric:tabular-nums}
+.income{color:var(--income)}
+.expense{color:var(--expense)}
+.panel{border-top:1px solid var(--rule);padding-top:16px;margin-top:24px}
+.panel-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:4px;padding:3px;border:1px solid var(--rule);border-radius:10px;background:var(--surface)}
+.seg button{border:0;background:transparent;color:var(--ink-2);font:500 14px var(--f-ui);padding:8px 10px;border-radius:7px;cursor:pointer;min-height:42px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.seg.small button{min-height:34px;padding:6px 10px;font-size:13px}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+@media (max-width:420px){.grid2{grid-template-columns:minmax(0,1fr)}}
+.field{margin-top:12px;min-width:0}
+label{display:block;font-size:13px;color:var(--ink-2);margin-bottom:4px}
+input,select{font:400 15px var(--f-ui);color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:8px;width:100%;min-height:44px;padding:9px 12px;min-width:0}
+input[type="date"]{direction:ltr}
+.suffix-wrap{position:relative}
+.suffix-wrap input{padding-inline-end:58px}
+.suffix{position:absolute;inset-inline-end:12px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--mute);pointer-events:none}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.btn{font:600 15px var(--f-ui);min-height:44px;padding:10px 18px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--rule)}
+.btn.danger{background:transparent;color:var(--expense);border-color:var(--expense)}
+.btn.block{width:100%}
+.btn:disabled{opacity:.6;cursor:default}
+.link{background:none;border:0;padding:6px 0;min-height:32px;color:var(--accent);font:500 14px var(--f-ui);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.link.danger{color:var(--expense)}
+.rows{list-style:none;padding:0}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 16px;padding:12px 0;border-top:1px solid var(--rule)}
+.row:first-child{border-top:0;padding-top:4px}
+.row-main{min-width:0}
+.row-cat{font-weight:600}
+.row-note{color:var(--ink-2);overflow-wrap:anywhere}
+.row-date{display:block;font-size:13px;color:var(--mute)}
+.row-amt{direction:ltr;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600}
+.row-bal{display:block;font-size:13px;font-weight:400;color:var(--mute)}
+.row-act{grid-column:1/-1;display:flex;gap:16px;flex-wrap:wrap}
+.more{margin-top:12px}
+.donut{display:flex;flex-wrap:wrap;gap:20px;align-items:center}
+.donut svg{width:156px;height:156px;flex:0 0 156px}
+.arc{fill:none;stroke:var(--c);stroke-width:6}
+.c1{--c:var(--s1)}.c2{--c:var(--s2)}.c3{--c:var(--s3)}.c4{--c:var(--s4)}.c5{--c:var(--s5)}.c6{--c:var(--s6)}.c7{--c:var(--s7)}.c8{--c:var(--s8)}.cx{--c:var(--sx)}
+.dn-total{font:700 2.9px var(--f-ui);fill:var(--ink)}
+.dn-unit{font:500 2.2px var(--f-ui);fill:var(--mute)}
+.legend{list-style:none;flex:1 1 200px;min-width:0}
+.legend li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--grid);font-size:14px}
+.sw{display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--c,var(--ink-2))}
+.legend .num{color:var(--ink-2);direction:ltr;text-align:right}
+.key{display:flex;gap:16px;list-style:none;margin-bottom:8px;font-size:13px;color:var(--ink-2)}
+.key li{display:flex;align-items:center;gap:6px}
+.bars{width:100%;max-width:540px;height:auto;display:block}
+.bi{fill:var(--income)}
+.be{fill:var(--expense)}
+.gl{stroke:var(--grid);stroke-width:1}
+.ax{stroke:var(--axis);stroke-width:1}
+.bars text{font:400 10px var(--f-ui);fill:var(--mute)}
+.tbl{margin-top:12px}
+.tbl>summary,.gate-extra>summary,.settings>summary{cursor:pointer;color:var(--accent);font-size:14px;min-height:36px;display:flex;align-items:center}
+table.data{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px;font-variant-numeric:tabular-nums}
+table.data th,table.data td{padding:7px 6px;border-bottom:1px solid var(--grid);text-align:start}
+table.data .n{text-align:end;direction:ltr}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.empty{color:var(--mute);padding:12px 0}
+.gate{min-height:70vh;display:grid;place-items:center;padding-block:16px}
+.gate-card{width:100%;max-width:440px}
+.gate-lead{font-size:16px;color:var(--ink-2)}
+.field-pw{position:relative}
+.field-pw input{padding-inline-end:76px}
+.field-pw .link{position:absolute;inset-inline-end:6px;top:50%;transform:translateY(-50%)}
+.gate-extra{margin-top:20px;border-top:1px solid var(--rule);padding-top:12px}
+.gate-extra>div{margin-top:10px}
+.banner{margin-bottom:16px;padding:10px 14px;border-radius:8px;background:var(--bad-bg);display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:14px}
+.settings{border-top:1px solid var(--rule);padding-top:12px;margin-top:24px}
+.set-block{padding:14px 0;border-top:1px solid var(--grid)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<div class="app" dir="rtl" lang="ar">
+<header class="mast">
+  <h1 class="brand">دفتر المال</h1>
+  <button id="btnLock" class="btn ghost" type="button" hidden>قفل الدفتر</button>
+</header>
+
+<div id="banner" class="banner" role="alert" hidden>
+  <span id="bannerText"></span>
+  <button id="bannerRetry" class="btn ghost" type="button">إعادة المحاولة</button>
+</div>
+
+<section id="gate" class="gate" hidden>
+  <div class="gate-card">
+    <p id="gateLead" class="gate-lead"></p>
+    <p id="storeNote" class="hint"></p>
+
+    <form id="gateForm" novalidate>
+      <div class="field">
+        <label for="pw">كلمة المرور</label>
+        <div class="field-pw">
+          <input id="pw" type="password" autocomplete="current-password" required>
+          <button id="pwToggle" class="link" type="button" aria-controls="pw">إظهار</button>
+        </div>
+      </div>
+      <div id="pwBox" class="field" hidden>
+        <label for="pw2">أعد كتابة كلمة المرور</label>
+        <input id="pw2" type="password" autocomplete="new-password">
+      </div>
+      <p id="gateMsg" class="msg" role="alert"></p>
+      <button id="gateBtn" class="btn block" type="submit">فتح الدفتر</button>
+    </form>
+
+    <details id="restoreBox" class="gate-extra">
+      <summary>استعادة من نسخة احتياطية</summary>
+      <div>
+        <label for="restoreFile">ملف النسخة الاحتياطية (.json)</label>
+        <input id="restoreFile" type="file" accept=".json,application/json">
+        <div class="field">
+          <label for="restorePw">كلمة مرور النسخة</label>
+          <input id="restorePw" type="password" autocomplete="off">
+        </div>
+        <p id="restoreMsg" class="msg" role="alert"></p>
+        <button id="restoreBtn" class="btn ghost" type="button">استعادة الدفتر</button>
+      </div>
+    </details>
+
+    <details id="forgotBox" class="gate-extra" hidden>
+      <summary>نسيت كلمة المرور؟</summary>
+      <div>
+        <p class="hint">لا يمكن استرجاع كلمة المرور، ولا يستطيع أحد قراءة البيانات بدونها. يمكنك حذف الدفتر الحالي والبدء من جديد، ثم استعادة نسخة احتياطية إن كانت لديك.</p>
+        <button id="resetBtn2" class="btn danger" type="button">حذف الدفتر الحالي</button>
+        <p id="resetMsg2" class="msg" role="alert"></p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<main id="app" hidden>
+  <nav class="acc-bar" aria-label="الحسابات">
+    <div id="accTabs" class="acc-tabs"></div>
+    <button id="accAdd" class="acc-add" type="button" aria-label="إضافة حساب جديد" aria-expanded="false">+</button>
+  </nav>
+  <form id="accForm" class="acc-form" novalidate hidden>
+    <label for="accName">اسم الحساب، مثل شركة أو اسم شخص</label>
+    <div class="acc-new">
+      <input id="accName" type="text" maxlength="40" autocomplete="off">
+      <button id="accSave" class="btn" type="submit">إضافة</button>
+      <button id="accCancel" class="btn ghost" type="button">إلغاء</button>
+    </div>
+    <p id="accMsg" class="msg" role="status"></p>
+  </form>
+  <div class="seg accounts" role="group" aria-label="العملة">
+    <button id="curL" type="button" aria-pressed="true">الدينار (LYD)</button>
+    <button id="curU" type="button" aria-pressed="false">الدولار (USD)</button>
+  </div>
+  <div class="layout">
+    <div class="col">
+      <section class="balance" aria-labelledby="balLbl">
+        <p id="balLbl" class="lbl">الرصيد الصافي بالدينار</p>
+        <p id="netMain" class="balance-num">0.00 LYD</p>
+        <div class="acc-acts">
+          <button id="accRen" class="link" type="button" aria-expanded="false" aria-controls="renForm">تعديل اسم الحساب</button>
+          <button id="accDel" class="link danger" type="button">حذف هذا الحساب</button>
+        </div>
+        <p id="accDelMsg" class="msg" role="status"></p>
+        <form id="renForm" class="acc-form" novalidate hidden>
+          <label for="renName">اسم الحساب</label>
+          <div class="acc-new">
+            <input id="renName" type="text" maxlength="40" autocomplete="off">
+            <button id="renSave" class="btn" type="submit">حفظ الاسم</button>
+            <button id="renCancel" class="btn ghost" type="button">إلغاء</button>
+          </div>
+          <p id="renMsg" class="msg" role="status"></p>
+        </form>
+      </section>
+
+      <dl class="totals">
+        <div>
+          <dt id="incLbl" class="lbl">إجمالي الدخول بالدينار</dt>
+          <dd>
+            <span id="incMain" class="amt income">0.00 LYD</span>
+          </dd>
+        </div>
+        <div>
+          <dt id="expLbl" class="lbl">إجمالي الخروج بالدينار</dt>
+          <dd>
+            <span id="expMain" class="amt expense">0.00 LYD</span>
+          </dd>
+        </div>
+      </dl>
+
+      <section class="panel" aria-labelledby="entryH">
+        <h2 id="entryH">قيد جديد</h2>
+        <div class="seg field" role="group" aria-label="نوع القيد">
+          <button id="tI" type="button" aria-pressed="true">دخول</button>
+          <button id="tE" type="button" aria-pressed="false">خروج</button>
+        </div>
+        <form id="entryForm" novalidate>
+          <div class="grid2">
+            <div class="field">
+              <label for="amt">المبلغ</label>
+              <div class="suffix-wrap">
+                <input id="amt" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00">
+                <span id="amtCur" class="suffix">LYD</span>
+              </div>
+            </div>
+            <div class="field">
+              <label for="date">التاريخ</label>
+              <input id="date" type="date">
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label for="cat">الفئة</label>
+              <select id="cat"></select>
+            </div>
+            <div class="field">
+              <label for="note">ملاحظة (اختيارية)</label>
+              <input id="note" type="text" maxlength="80" autocomplete="off">
+            </div>
+          </div>
+          <p id="entryMsg" class="msg" role="status" aria-live="polite"></p>
+          <div class="actions">
+            <button id="saveBtn" class="btn" type="submit">حفظ القيد</button>
+            <button id="cancelEdit" class="btn ghost" type="button" hidden>إلغاء التعديل</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="panel" aria-labelledby="donH" style="margin-top:0">
+        <div class="panel-head">
+          <h2 id="donH">الخروج حسب الفئة (بالدينار)</h2>
+          <div class="seg small" role="group" aria-label="فترة الرسم">
+            <button id="pMonth" type="button" aria-pressed="true">هذا الشهر</button>
+            <button id="pAll" type="button" aria-pressed="false">كل الوقت</button>
+          </div>
+        </div>
+        <div id="donut"></div>
+        <details class="tbl">
+          <summary>عرض الأرقام في جدول</summary>
+          <div id="donutTbl"></div>
+        </details>
+      </section>
+
+      <section class="panel" aria-labelledby="barH">
+        <h2 id="barH">الدخول والخروج، آخر ستة أشهر (بالدينار)</h2>
+        <ul class="key" style="margin-top:10px">
+          <li><span class="sw" style="--c:var(--income)"></span>دخول</li>
+          <li><span class="sw" style="--c:var(--expense)"></span>خروج</li>
+        </ul>
+        <div id="bars"></div>
+        <details class="tbl">
+          <summary>عرض الأرقام في جدول</summary>
+          <div id="barsTbl"></div>
+        </details>
+      </section>
+
+      <section class="panel" aria-labelledby="ledH">
+        <div class="panel-head">
+          <h2 id="ledH">سجل القيود</h2>
+          <div class="seg small" role="group" aria-label="تصفية القيود">
+            <button type="button" data-f="all" aria-pressed="true">الكل</button>
+            <button type="button" data-f="i" aria-pressed="false">الدخول</button>
+            <button type="button" data-f="e" aria-pressed="false">الخروج</button>
+          </div>
+        </div>
+        <ul id="rows" class="rows"></ul>
+        <p id="rowsEmpty" class="empty" hidden>لا توجد قيود بعد. أضف أول دخول أو خروج من النموذج أعلاه.</p>
+        <button id="more" class="btn ghost more" type="button" hidden>عرض المزيد</button>
+      </section>
+
+      <details id="settings" class="settings">
+        <summary>الإعدادات</summary>
+
+        <div class="set-block">
+          <h3>تغيير كلمة المرور</h3>
+          <form id="pwForm" novalidate>
+            <div class="field">
+              <label for="curPw">كلمة المرور الحالية</label>
+              <input id="curPw" type="password" autocomplete="current-password">
+            </div>
+            <div class="grid2">
+              <div class="field">
+                <label for="newPw">كلمة المرور الجديدة</label>
+                <input id="newPw" type="password" autocomplete="new-password">
+              </div>
+              <div class="field">
+                <label for="newPw2">أعد الكتابة</label>
+                <input id="newPw2" type="password" autocomplete="new-password">
+              </div>
+            </div>
+            <p id="pwMsg" class="msg" role="status"></p>
+            <div class="actions"><button id="pwBtn" class="btn ghost" type="submit">تغيير كلمة المرور</button></div>
+          </form>
+        </div>
+
+        <div class="set-block">
+          <h3>النسخ الاحتياطي</h3>
+          <p class="hint">النسخة الاحتياطية مشفّرة بكلمة المرور نفسها، ويمكن استعادتها على أي جهاز.</p>
+          <div class="actions" style="margin-top:8px"><button id="exportBtn" class="btn ghost" type="button" hidden>تنزيل نسخة احتياطية</button></div>
+          <p id="exportMsg" class="msg" role="status"></p>
+        </div>
+
+        <div class="set-block">
+          <h3>حذف البيانات</h3>
+          <p class="hint">يحذف كل القيود والإعدادات من هذا الحساب. لا يمكن التراجع عن ذلك إلا من نسخة احتياطية.</p>
+          <div class="actions" style="margin-top:8px"><button id="wipeBtn" class="btn danger" type="button">حذف كل البيانات</button></div>
+          <p id="wipeMsg" class="msg" role="status"></p>
+        </div>
+
+        <p id="storeInfo" class="hint"></p>
+      </details>
+    </div>
+  </div>
+</main>
+</div>
+
+<script>
+'use strict';
+/* ---------- constants ---------- */
+const PFX = 'ledger.v2:';            // localStorage prefix (fallback backend)
+const LEGACY = 'ledger.vault.v1';    // first version's single encrypted blob
+const ITER = 310000;                 // PBKDF2-SHA256 iterations (OWASP guidance)
+const MAIN = 'main';                 // account that every older entry belongs to
+const DEF_RATE = 5.5;                // starting value; the user edits it
+const CAT_I = ['راتب', 'عمل حر', 'هدايا', 'استثمار', 'أخرى'];
+const CAT_E = [['طعام', 'c1'], ['سكن', 'c2'], ['مواصلات', 'c3'], ['فواتير', 'c4'], ['صحة', 'c5'],
+               ['تعليم', 'c6'], ['تسوق', 'c7'], ['ترفيه', 'c8'], ['أخرى', 'cx']];
+const CLS = {};
+CAT_E.forEach(([n, c]) => { CLS[n] = c; });
+
+/* ---------- small helpers ---------- */
+const enc = new TextEncoder(), dec = new TextDecoder();
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const b64 = buf => { const u = new Uint8Array(buf); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const rnd = n => crypto.getRandomValues(new Uint8Array(n));
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const byTs = (a, b) => a.ts - b.ts;
+
+/* ---------- errors ---------- */
+class BadPw extends Error {}
+class Conflict extends Error {}
+
+/* ---------- crypto ---------- */
+async function kdf(pw, salt) {
+  const base = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: ITER, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function sealBytes(key, bytes) {
+  const iv = rnd(12);
+  return { iv: b64(iv), d: b64(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, bytes)) };
+}
+async function openBytes(key, env) {
+  return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(env.iv) }, key, unb64(env.d)));
+}
+async function sealJson(key, obj) {
+  const e = await sealBytes(key, enc.encode(JSON.stringify(obj)));
+  return { v: 2, iv: e.iv, d: e.d };
+}
+async function openJson(key, env) { return JSON.parse(dec.decode(await openBytes(key, env))); }
+async function newDekRaw() {
+  const k = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+  return new Uint8Array(await crypto.subtle.exportKey('raw', k));
+}
+const importDek = raw => crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
+async function metaFor(kek, salt, dekRaw) {
+  const e = await sealBytes(kek, dekRaw);
+  return { v: 2, s: b64(salt), wi: e.iv, w: e.d };
+}
+
+/* ---------- in-memory state ---------- */
+const ST = {
+  kind: 'none',          // 'db' | 'local' | 'none'
+  db: null, dl: null, uid: null,
+  dek: null, dekRaw: null, kek: null, salt: null,
+  rate: DEF_RATE, accounts: [], tx: [],
+  rev: new Map(),        // doc id -> revision last seen or written
+  dirty: new Set(),      // doc ids waiting to be written
+  chain: Promise.resolve(), pending: 0,
+  unlocked: false,
+  onState: () => {}
+};
+
+/* ---------- backend selection ---------- */
+async function initBackend() {
+  const c = window.claude;
+  if (c && typeof c.use === 'function') {
+    try { ST.dl = await c.use('downloads'); } catch (e) { ST.dl = null; }
+    try {
+      const db = await c.use('db');
+      const user = db ? await c.use('user') : null;
+      const id = user ? await user.id() : null;
+      if (db && typeof id === 'string' && /^[A-Za-z0-9_.~:@+-]{1,200}$/.test(id)) {
+        ST.db = db; ST.uid = id; ST.kind = 'db';
+        return;
+      }
+    } catch (e) { /* fall through to local storage */ }
+  }
+  try {
+    localStorage.setItem('ledger.probe', '1');
+    localStorage.removeItem('ledger.probe');
+    ST.kind = 'local';
+  } catch (e) { ST.kind = 'none'; }
+}
+
+/* ---------- raw document access ---------- */
+const docPath = id => 'data/users/' + ST.uid + '/' + id;
+async function listAll() {
+  const out = new Map();
+  if (ST.kind === 'db') {
+    const snap = await ST.db.collection('data/users/' + ST.uid).get();
+    for (const d of snap.docs) if (d.exists) out.set(d.id, d.data());
+  } else {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(PFX)) out.set(k.slice(PFX.length), JSON.parse(localStorage.getItem(k)));
+    }
+  }
+  return out;
+}
+async function readOne(id) {
+  if (ST.kind === 'db') {
+    const s = await ST.db.doc(docPath(id)).get();
+    return s.exists ? s.data() : null;
+  }
+  const raw = localStorage.getItem(PFX + id);
+  return raw ? JSON.parse(raw) : null;
+}
+async function writeRaw(id, body) {
+  if (ST.kind === 'db') await ST.db.doc(docPath(id)).set(body);
+  else localStorage.setItem(PFX + id, JSON.stringify(body));
+}
+async function deleteRaw(id) {
+  if (ST.kind === 'db') await ST.db.doc(docPath(id)).delete();
+  else localStorage.removeItem(PFX + id);
+}
+/* Revision checks: a write is refused if the stored revision is not the one
+   this page last saw, so a stale tab cannot silently overwrite another device. */
+async function putDoc(id, body) {
+  const cur = await readOne(id);
+  const known = ST.rev.get(id) || 0;
+  if (((cur && cur.rev) || 0) !== known) throw new Conflict(id);
+  const next = known + 1;
+  await writeRaw(id, { ...body, rev: next });
+  ST.rev.set(id, next);
+}
+async function dropDoc(id) {
+  const cur = await readOne(id);
+  const known = ST.rev.get(id) || 0;
+  if (cur && ((cur.rev) || 0) !== known) throw new Conflict(id);
+  if (cur) await deleteRaw(id);
+  ST.rev.delete(id);
+}
+
+/* ---------- serialized writes ---------- */
+function op(fn) {
+  ST.pending++;
+  ST.onState();
+  const run = ST.chain.then(fn);
+  const done = () => { ST.pending--; ST.onState(); };
+  ST.chain = run.then(done, done);
+  return run;
+}
+async function buildDoc(id) {
+  if (id === 'cfg') return sealJson(ST.dek, { rate: ST.rate, acc: ST.accounts });
+  if (id.startsWith('m-')) {
+    const rows = ST.tx.filter(t => t.date.slice(0, 7) === id.slice(2)).sort(byTs);
+    return rows.length ? sealJson(ST.dek, rows) : null;
+  }
+  throw new Error('unknown document ' + id);
+}
+async function flushDirty() {
+  while (ST.dirty.size) {
+    const id = ST.dirty.values().next().value;
+    ST.dirty.delete(id);
+    try {
+      const body = await buildDoc(id);
+      if (body === null) await dropDoc(id); else await putDoc(id, body);
+    } catch (e) {
+      ST.dirty.add(id);
+      throw e;
+    }
+  }
+}
+function persist(ids) {
+  ids.forEach(i => ST.dirty.add(i));
+  return op(flushDirty);
+}
+
+/* ---------- transactions ---------- */
+function normTx(t, rate) {
+  const amt = Number(t.amt), date = String(t.date || '');
+  if (!(amt > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const isI = t.t === 'i';
+  // records saved before currencies existed: income was USD, expenses were LYD
+  const cur = t.cur === 'USD' || t.cur === 'LYD' ? t.cur : (isI ? 'USD' : 'LYD');
+  const out = {
+    id: String(t.id || newId()), t: isI ? 'i' : 'e', cur, a: String(t.a || MAIN).slice(0, 40),
+    amt: Math.round(amt * 100) / 100, cat: String(t.cat || 'أخرى').slice(0, 30),
+    date, note: String(t.note || '').slice(0, 80), ts: Number(t.ts) || 0
+  };
+  if (cur === 'USD') { const r = Number(t.r); out.r = r > 0 ? r : rate; }
+  return out;
+}
+
+/* ---------- accounts ---------- */
+const defaultAccounts = () => [{ id: MAIN, name: 'الحساب الرئيسي' }];
+// Keeps only well-formed accounts; the main account always exists.
+function cleanAccounts(list) {
+  const out = [];
+  for (const a of Array.isArray(list) ? list : []) {
+    const id = String((a && a.id) || '').slice(0, 40), name = String((a && a.name) || '').trim().slice(0, 40);
+    if (id && name && !out.some(x => x.id === id)) out.push({ id, name });
+  }
+  if (!out.some(x => x.id === MAIN)) out.unshift({ id: MAIN, name: 'الحساب الرئيسي' });
+  return out;
+}
+
+/* ---------- vault lifecycle ---------- */
+async function openFromDocs(pw, docs) {
+  const meta = docs.get('meta');
+  if (!meta || meta.v !== 2) throw new Error('bad meta');
+  const salt = unb64(meta.s);
+  const kek = await kdf(pw, salt);
+  let raw;
+  try { raw = await openBytes(kek, { iv: meta.wi, d: meta.w }); } catch (e) { throw new BadPw(); }
+  const dek = await importDek(raw);
+  let rate = DEF_RATE, accounts = defaultAccounts();
+  if (docs.has('cfg')) { const c = await openJson(dek, docs.get('cfg')); if (c && c.rate > 0) rate = c.rate; if (c) accounts = cleanAccounts(c.acc); }
+  const tx = [], rev = new Map();
+  for (const [id, body] of docs) {
+    rev.set(id, body.rev || 0);
+    if (id.startsWith('m-')) {
+      for (const t of await openJson(dek, body)) {
+        const n = normTx(t, rate);
+        if (n) { if (!accounts.some(a => a.id === n.a)) n.a = MAIN; tx.push(n); }
+      }
+    }
+  }
+  Object.assign(ST, { dek, dekRaw: raw, kek, salt, rate, accounts, tx, rev, dirty: new Set(), unlocked: true });
+}
+async function createVault(pw) {
+  const existing = await listAll();
+  if (existing.has('meta')) throw new Error('exists');
+  const salt = rnd(16), kek = await kdf(pw, salt), raw = await newDekRaw(), dek = await importDek(raw);
+  Object.assign(ST, { dek, dekRaw: raw, kek, salt, rate: DEF_RATE, accounts: defaultAccounts(), tx: [], dirty: new Set(), unlocked: true });
+  ST.rev = new Map([...existing].map(([id, b]) => [id, b.rev || 0]));
+  await op(async () => {
+    await putDoc('cfg', await sealJson(ST.dek, { rate: ST.rate, acc: ST.accounts }));
+    await putDoc('meta', await metaFor(ST.kek, ST.salt, ST.dekRaw));   // commit marker, written last
+  });
+}
+function legacyRaw() { try { return localStorage.getItem(LEGACY); } catch (e) { return null; } }
+async function migrateLegacy(pw) {
+  const v1 = JSON.parse(legacyRaw());
+  const salt = unb64(v1.s), kek = await kdf(pw, salt);
+  let S;
+  try { S = JSON.parse(dec.decode(await openBytes(kek, { iv: v1.iv, d: v1.d }))); } catch (e) { throw new BadPw(); }
+  const rate = S.rate > 0 ? S.rate : DEF_RATE;
+  const raw = await newDekRaw(), dek = await importDek(raw);
+  const tx = (S.tx || []).map(t => normTx(t, rate)).filter(Boolean);
+  const existing = await listAll();
+  Object.assign(ST, { dek, dekRaw: raw, kek, salt, rate, accounts: defaultAccounts(), tx, dirty: new Set(), unlocked: true });
+  ST.rev = new Map([...existing].map(([id, b]) => [id, b.rev || 0]));
+  await op(async () => {
+    await putDoc('cfg', await sealJson(ST.dek, { rate, acc: ST.accounts }));
+    const months = [...new Set(tx.map(t => t.date.slice(0, 7)))];
+    for (const m of months) await putDoc('m-' + m, await sealJson(ST.dek, tx.filter(t => t.date.slice(0, 7) === m).sort(byTs)));
+    await putDoc('meta', await metaFor(kek, salt, raw));
+  });
+  try { localStorage.removeItem(LEGACY); } catch (e) { /* ignore */ }
+}
+async function unlock(pw) {
+  const docs = await listAll();
+  if (docs.has('meta')) { await openFromDocs(pw, docs); return; }
+  if (legacyRaw()) { await migrateLegacy(pw); return; }
+  throw new Error('no vault');
+}
+async function changePassword(cur, nw) {
+  const docs = await listAll();
+  const meta = docs.get('meta');
+  if (!meta) throw new Error('no vault');
+  try { await openBytes(await kdf(cur, unb64(meta.s)), { iv: meta.wi, d: meta.w }); } catch (e) { throw new BadPw(); }
+  const salt = rnd(16), kek = await kdf(nw, salt);
+  await op(async () => {
+    await putDoc('meta', await metaFor(kek, salt, ST.dekRaw));
+    ST.kek = kek; ST.salt = salt;
+  });
+}
+async function lockVault(force) {
+  if (ST.dirty.size || ST.pending) {
+    try { await op(flushDirty); }
+    catch (e) { if (!force) return false; }
+  }
+  Object.assign(ST, { dek: null, dekRaw: null, kek: null, salt: null, accounts: [], tx: [], rev: new Map(), dirty: new Set(), unlocked: false });
+  return true;
+}
+
+/* ---------- backups (encrypted documents, never plaintext) ---------- */
+async function exportJson() {
+  if (ST.dirty.size) await op(flushDirty);
+  const docs = await listAll(), out = {};
+  for (const [id, b] of docs) out[id] = b;
+  return JSON.stringify({ format: 'ledger-backup', v: 2, created: new Date().toISOString(), docs: out });
+}
+function parseBackup(text) {
+  const o = JSON.parse(text);
+  if (!o || o.format !== 'ledger-backup' || !o.docs || typeof o.docs !== 'object') throw new Error('format');
+  const docs = new Map(Object.entries(o.docs));
+  if (!docs.has('meta')) throw new Error('format');
+  return docs;
+}
+async function verifyBackup(docs, pw) {
+  const meta = docs.get('meta');
+  const kek = await kdf(pw, unb64(meta.s));
+  let raw;
+  try { raw = await openBytes(kek, { iv: meta.wi, d: meta.w }); } catch (e) { throw new BadPw(); }
+  const dek = await importDek(raw);
+  let rate = DEF_RATE;
+  if (docs.has('cfg')) { const c = await openJson(dek, docs.get('cfg')); if (c && c.rate > 0) rate = c.rate; }
+  for (const [id, b] of docs) if (id.startsWith('m-')) await openJson(dek, b);   // proves every month decrypts
+}
+async function restoreBackup(docs, pw) {
+  await verifyBackup(docs, pw);
+  const current = await listAll();
+  ST.rev = new Map([...current].map(([id, b]) => [id, b.rev || 0]));
+  await op(async () => {
+    for (const [id, b] of docs) { const { rev, ...body } = b; await putDoc(id, body); }
+    for (const id of current.keys()) if (!docs.has(id)) await dropDoc(id);
+  });
+  await unlock(pw);
+}
+async function wipeAll() {
+  const docs = await listAll();
+  ST.rev = new Map([...docs].map(([id, b]) => [id, b.rev || 0]));
+  await op(async () => { for (const id of docs.keys()) await dropDoc(id); });
+  try { localStorage.removeItem(LEGACY); } catch (e) { /* ignore */ }
+  Object.assign(ST, { dek: null, dekRaw: null, kek: null, salt: null, accounts: [], tx: [], dirty: new Set(), unlocked: false });
+}
+
+
+/* ---------- view state ---------- */
+let gateMode = 'loading', failCount = 0, editId = null, type = 'i', cur = 'LYD', acc = MAIN, period = 'month', filter = 'all', shown = 20;
+let armedDel = null, armedWipe = false, armedReset = false, armedRestore = false, pendingBackup = null;
+
+/* ---------- formatting ---------- */
+const todayISO = () => {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+};
+const monthNow = () => todayISO().slice(0, 7);
+const money = (n, d = 2) => {
+  const v = Math.abs(n) < 0.005 ? 0 : n;
+  return (v < 0 ? '-' : '') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+};
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const say = (el, text, kind) => { el.textContent = text; el.className = 'msg' + (kind ? ' ' + kind : ''); };
+const storeNote = () => ST.kind === 'db'
+  ? 'البيانات مشفّرة قبل إرسالها، وتُحفظ في حسابك فتظهر على أي جهاز تفتح منه هذه الصفحة بكلمة المرور نفسها.'
+  : ST.kind === 'local'
+    ? 'البيانات مشفّرة، وتُحفظ على هذا المتصفح فقط ولن تظهر على أجهزة أخرى.'
+    : '';
+const MONTH_FMT = new Intl.DateTimeFormat('ar', { month: 'short' });
+const monthLabel = k => { const [y, m] = k.split('-').map(Number); try { return MONTH_FMT.format(new Date(y, m - 1, 1)); } catch (e) { return k; } };
+const niceMax = v => {
+  if (!(v > 0)) return 100;
+  const e = Math.pow(10, Math.floor(Math.log10(v))), f = v / e;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e;
+};
+
+/* ---------- banner ---------- */
+function showBanner(text) { $('bannerText').textContent = text; $('banner').hidden = false; }
+function hideBanner() { $('banner').hidden = true; }
+
+/* ---------- gate ---------- */
+function setGateBusy(busy, text) {
+  ['gateBtn', 'pw', 'pw2', 'pwToggle'].forEach(id => { $(id).disabled = busy; });
+  if (text) say($('gateMsg'), text, '');
+}
+function showGate(mode, msg, kind) {
+  gateMode = mode;
+  ST.unlocked = false; clearTimeout(ST.idle);
+  $('app').hidden = true; $('btnLock').hidden = true; $('gate').hidden = false;
+  $('pw').value = ''; $('pw2').value = '';
+  $('pw').autocomplete = mode === 'create' ? 'new-password' : 'current-password';
+  $('pwBox').hidden = mode !== 'create';
+  $('gateForm').hidden = mode === 'none' || mode === 'loading';
+  $('restoreBox').hidden = mode === 'none' || mode === 'loading';
+  $('forgotBox').hidden = mode !== 'unlock';
+  $('gateBtn').textContent = mode === 'create' ? 'إنشاء الدفتر' : 'فتح الدفتر';
+  $('gateLead').textContent = {
+    loading: 'جارٍ فتح الدفتر…',
+    create: 'أنشئ دفترك. اختر كلمة مرور تتذكرها، فلا يمكن استرجاعها.',
+    unlock: 'أدخل كلمة المرور لفتح دفترك.',
+    none: 'هذا المتصفح يمنع حفظ البيانات، لذلك لا يمكن استخدام الدفتر هنا. افتح الصفحة في متصفح آخر.'
+  }[mode];
+  $('storeNote').textContent = storeNote();
+  say($('gateMsg'), msg || '', msg ? kind || '' : '');
+  $('restoreBtn').textContent = 'استعادة الدفتر';
+  armedRestore = false;
+  armedReset = false; $('resetBtn2').textContent = 'حذف الدفتر الحالي';
+  // a lock cancels any half-finished two-click action
+  toggleRenameForm(false);
+  armedAcc = false;
+  armedWipe = false; $('wipeBtn').textContent = 'حذف كل البيانات'; say($('wipeMsg'), '', '');
+}
+
+/* ---------- entering and locking ---------- */
+function enterApp() {
+  $('pw').value = ''; $('pw2').value = ''; failCount = 0;
+  $('gate').hidden = true; $('app').hidden = false; $('btnLock').hidden = false;
+  ST.unlocked = true; armedDel = null;
+  $('exportBtn').hidden = !(ST.dl || ST.kind === 'local');
+  $('storeInfo').textContent = storeNote();
+  if (!ST.accounts.some(a => a.id === acc)) acc = MAIN;
+  $('date').value = todayISO();
+  resetForm();   // an entry left open in edit mode before the lock starts clean
+  setType('i');
+  renderAll();
+  resetIdle();
+}
+function resetIdle() {
+  clearTimeout(ST.idle);
+  if (ST.unlocked) ST.idle = setTimeout(autoLock, 5 * 60 * 1000);
+}
+async function autoLock() {
+  const ok = await lockVault(false);
+  if (ok) showGate('unlock', 'تم قفل الدفتر بعد 5 دقائق بلا نشاط.', '');
+  else { showBanner('تعذر حفظ آخر التغييرات، لذلك لم يُقفل الدفتر. اضغط إعادة المحاولة.'); resetIdle(); }
+}
+async function forceConflictLock() {
+  await lockVault(true);
+  showGate('unlock', 'تم تعديل الدفتر من جهاز آخر، فلم يُحفظ آخر تغيير. أدخل كلمة المرور لتحميل أحدث نسخة.', 'err');
+}
+
+/* ---------- saving ---------- */
+async function saveNow(ids, okText, msgEl) {
+  try {
+    await persist(ids);
+    hideBanner();
+    if (okText && msgEl) say(msgEl, okText, 'ok');
+    return true;
+  } catch (err) {
+    if (err instanceof Conflict) { await forceConflictLock(); return false; }
+    if (err && err.code === 'invalid_argument') showBanner('تعذر الحفظ: التخزين لا يقبل هذا التغيير. قد يكون هذا الشهر قد بلغ حدّه، أو أن صلاحيتك في الصفحة لا تسمح بالحفظ. القيد ما زال ظاهرًا لكنه لم يُحفظ.');
+    else showBanner('تعذر حفظ التغييرات على الخادم. ما زالت معروضة على الشاشة، اضغط إعادة المحاولة.');
+    return false;
+  }
+}
+
+/* ---------- derived figures ---------- */
+const inView = t => t.a === acc && t.cur === cur;   // entries of the open account and currency
+function totals() {
+  const T = { i: 0, e: 0 };
+  for (const t of ST.tx) if (inView(t)) T[t.t] += t.amt;
+  return { inc: T.i, exp: T.e, net: T.i - T.e };
+}
+function expenseGroups() {
+  const m = new Map();
+  for (const t of ST.tx) {
+    if (t.t !== 'e' || !inView(t)) continue;
+    if (period === 'month' && t.date.slice(0, 7) !== monthNow()) continue;
+    m.set(t.cat, (m.get(t.cat) || 0) + t.amt);
+  }
+  return [...m].sort((a, b) => b[1] - a[1]);
+}
+function monthKeys(n) {
+  const out = [], now = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    out.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+  }
+  return out;
+}
+
+/* ---------- rendering ---------- */
+function renderTotals() {
+  const T = totals(), c = cur, word = c === 'USD' ? 'بالدولار' : 'بالدينار';
+  const who = (ST.accounts.find(a => a.id === acc) || { name: '' }).name;
+  $('balLbl').textContent = 'الرصيد الصافي ' + word + ' · ' + who;
+  const net = $('netMain');
+  net.textContent = money(T.net) + ' ' + c;
+  net.classList.toggle('expense', T.net < -0.004);
+  $('incLbl').textContent = 'إجمالي الدخول ' + word;
+  $('incMain').textContent = money(T.inc) + ' ' + c;
+  $('expLbl').textContent = 'إجمالي الخروج ' + word;
+  $('expMain').textContent = money(T.exp) + ' ' + c;
+}
+function renderDonut() {
+  const groups = expenseGroups(), total = groups.reduce((s, g) => s + g[1], 0);
+  $('donH').textContent = 'الخروج حسب الفئة ' + (cur === 'USD' ? 'بالدولار' : 'بالدينار');
+  const box = $('donut'), tb = $('donutTbl');
+  if (!groups.length) {
+    box.innerHTML = '<p class="empty">لا يوجد خروج في هذه الفترة.</p>';
+    tb.innerHTML = '';
+    return;
+  }
+  let off = 0, arcs = '', legend = '', rows = '';
+  for (const [name, v] of groups) {
+    const pct = v / total * 100, c = CLS[name] || 'cx';
+    arcs += `<circle class="arc ${c}" cx="21" cy="21" r="15.9155" stroke-dasharray="${pct.toFixed(3)} ${(100 - pct).toFixed(3)}" stroke-dashoffset="${(-off).toFixed(3)}"><title>${esc(name)}: ${money(v)} ${cur} (${pct.toFixed(1)}%)</title></circle>`;
+    off += pct;
+    legend += `<li><span class="sw ${c}"></span><span>${esc(name)}</span><span class="num">${money(v)} ${cur} · ${pct.toFixed(0)}%</span></li>`;
+    rows += `<tr><th scope="row">${esc(name)}</th><td class="n">${money(v)}</td><td class="n">${pct.toFixed(1)}%</td></tr>`;
+  }
+  const label = money(total, 0), size = label.length > 9 ? '2.3' : '2.9';
+  box.innerHTML = `<div class="donut"><svg viewBox="0 0 42 42" role="img" aria-label="توزيع الخروج حسب الفئة"><g transform="rotate(-90 21 21)">${arcs}</g><text class="dn-total" x="21" y="21.4" text-anchor="middle" style="font-size:${size}px">${label}</text><text class="dn-unit" x="21" y="25" text-anchor="middle">${cur}</text></svg><ul class="legend">${legend}</ul></div>`;
+  tb.innerHTML = `<table class="data"><caption class="sr">الخروج حسب الفئة</caption><thead><tr><th scope="col">الفئة</th><th scope="col" class="n">المبلغ (${cur})</th><th scope="col" class="n">النسبة</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+function renderBars() {
+  $('barH').textContent = 'الدخول والخروج، آخر ستة أشهر (' + (cur === 'USD' ? 'بالدولار' : 'بالدينار') + ')';
+  const data = monthKeys(6).map(k => {
+    let inc = 0, exp = 0;
+    for (const t of ST.tx) {
+      if (!inView(t) || t.date.slice(0, 7) !== k) continue;
+      if (t.t === 'i') inc += t.amt; else exp += t.amt;
+    }
+    return { k, inc, exp, label: monthLabel(k) };
+  });
+  const top = niceMax(Math.max(0, ...data.flatMap(d => [d.inc, d.exp])));
+  const W = 360, H = 214, x0 = 44, x1 = 352, y0 = 12, y1 = 176, gw = (x1 - x0) / 6, bw = 15, gap = 3;
+  let s = '';
+  for (const v of [0, top / 2, top]) {
+    const y = y1 - (v / top) * (y1 - y0);
+    s += `<line class="gl" x1="${x0}" x2="${x1}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}"/><text x="${x0 - 6}" y="${(y + 3.5).toFixed(1)}" text-anchor="end">${money(v, 0)}</text>`;
+  }
+  s += `<line class="ax" x1="${x0}" x2="${x1}" y1="${y1}" y2="${y1}"/>`;
+  data.forEach((d, i) => {
+    const gx = x0 + i * gw + (gw - (bw * 2 + gap)) / 2;
+    const hi = d.inc / top * (y1 - y0), he = d.exp / top * (y1 - y0);
+    s += `<rect class="bi" x="${gx.toFixed(1)}" y="${(y1 - hi).toFixed(1)}" width="${bw}" height="${hi.toFixed(1)}" rx="2"><title>دخول ${esc(d.label)}: ${money(d.inc)} ${cur}</title></rect>`;
+    s += `<rect class="be" x="${(gx + bw + gap).toFixed(1)}" y="${(y1 - he).toFixed(1)}" width="${bw}" height="${he.toFixed(1)}" rx="2"><title>خروج ${esc(d.label)}: ${money(d.exp)} ${cur}</title></rect>`;
+    s += `<text x="${(x0 + i * gw + gw / 2).toFixed(1)}" y="${y1 + 18}" text-anchor="middle">${esc(d.label)}</text>`;
+  });
+  $('bars').innerHTML = `<svg class="bars" viewBox="0 0 ${W} ${H}" role="img" aria-label="الدخول والخروج الشهري (${cur})">${s}</svg>`;
+  $('barsTbl').innerHTML = `<table class="data"><caption class="sr">الدخول والخروج الشهري (${cur})</caption><thead><tr><th scope="col">الشهر</th><th scope="col" class="n">دخول</th><th scope="col" class="n">خروج</th><th scope="col" class="n">الفرق</th></tr></thead><tbody>${data.map(d => `<tr><th scope="row">${esc(d.label)}</th><td class="n">${money(d.inc)}</td><td class="n">${money(d.exp)}</td><td class="n">${money(d.inc - d.exp)}</td></tr>`).join('')}</tbody></table>`;
+}
+function renderRows() {
+  const bal = new Map();
+  let run = 0;
+  for (const t of ST.tx.filter(inView).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.ts - b.ts)) {
+    run += t.t === 'i' ? t.amt : -t.amt;
+    bal.set(t.id, run);
+  }
+  let list = ST.tx.filter(inView).sort((a, b) => a.date === b.date ? b.ts - a.ts : (a.date < b.date ? 1 : -1));
+  if (filter !== 'all') list = list.filter(t => t.t === filter);
+  $('rows').innerHTML = list.slice(0, shown).map(t => {
+    const inc = t.t === 'i', armed = armedDel === t.id;
+    return `<li class="row"><div class="row-main"><span class="row-cat">${esc(t.cat)}</span>${t.note ? ` <span class="row-note">· ${esc(t.note)}</span>` : ''}<span class="row-date ltr">${t.date}</span></div><div class="row-amt"><span class="${inc ? 'income' : 'expense'}">${inc ? '+' : '-'}${money(t.amt)} ${cur}</span><span class="row-bal" dir="rtl">الرصيد <span class="ltr">${money(bal.get(t.id))} ${cur}</span></span></div><div class="row-act"><button type="button" class="link" data-act="edit" data-id="${t.id}">تعديل</button><button type="button" class="link danger" data-act="del" data-id="${t.id}">${armed ? 'تأكيد الحذف' : 'حذف'}</button>${armed ? `<button type="button" class="link" data-act="keep" data-id="${t.id}">تراجع</button>` : ''}</div></li>`;
+  }).join('');
+  $('rowsEmpty').hidden = ST.tx.some(inView);
+  $('more').hidden = list.length <= shown;
+}
+function renderAll() {
+  renderAccounts(); renderTotals(); renderDonut(); renderBars(); renderRows();
+}
+
+/* ---------- entry form ---------- */
+function setType(t) {
+  type = t;
+  $('tI').setAttribute('aria-pressed', String(t === 'i'));
+  $('tE').setAttribute('aria-pressed', String(t === 'e'));
+  $('cat').innerHTML = (t === 'i' ? CAT_I : CAT_E.map(c => c[0])).map(c => `<option>${esc(c)}</option>`).join('');
+}
+function setView(a, c) {
+  if (a !== acc) toggleRenameForm(false);
+  acc = a; cur = c; armedAcc = false;
+  renderAll();
+}
+function renderAccounts() {
+  const box = $('accTabs');
+  box.textContent = '';
+  for (const a of ST.accounts) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.acc = a.id;
+    b.textContent = a.name;
+    b.setAttribute('aria-pressed', String(a.id === acc));
+    box.appendChild(b);
+  }
+  $('curL').setAttribute('aria-pressed', String(cur === 'LYD'));
+  $('curU').setAttribute('aria-pressed', String(cur === 'USD'));
+  $('amtCur').textContent = cur;
+  renderAccDel();
+}
+function resetForm() {
+  editId = null;
+  $('amt').value = ''; $('note').value = '';
+  $('saveBtn').textContent = 'حفظ القيد';
+  $('cancelEdit').hidden = true;
+  setType(type);
+  say($('entryMsg'), '', '');
+  renderRows();
+}
+function startEdit(id) {
+  const t = ST.tx.find(x => x.id === id);
+  if (!t) return;
+  editId = id; armedDel = null;
+  setType(t.t);
+  setView(t.a, t.cur);
+  if (!Array.from($('cat').options).some(o => o.value === t.cat)) $('cat').add(new Option(t.cat, t.cat));
+  $('cat').value = t.cat;
+  $('amt').value = String(t.amt);
+  $('date').value = t.date;
+  $('note').value = t.note || '';
+  $('saveBtn').textContent = 'حفظ التعديل';
+  $('cancelEdit').hidden = false;
+  say($('entryMsg'), 'تعدّل قيدًا موجودًا. غيّر الحقول ثم احفظ.', '');
+  $('entryForm').scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  $('amt').focus();
+  renderRows();
+}
+async function onSave(e) {
+  e.preventDefault();
+  const m = $('entryMsg');
+  const amt = Number($('amt').value), date = $('date').value, cat = $('cat').value;
+  const note = $('note').value.trim();
+  if (!(amt > 0)) { say(m, 'أدخل مبلغًا أكبر من صفر.', 'err'); $('amt').focus(); return; }
+  if (amt > 1e9) { say(m, 'المبلغ كبير جدًا. تحقق من الرقم.', 'err'); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { say(m, 'اختر تاريخًا صحيحًا.', 'err'); return; }
+  const prev = editId ? ST.tx.find(t => t.id === editId) : null;
+  const row = { id: prev ? prev.id : newId(), t: type, cur, a: prev ? prev.a : acc, amt: Math.round(amt * 100) / 100, cat, date, note, ts: prev ? prev.ts : Date.now() };
+  const ids = new Set(['m-' + date.slice(0, 7)]);
+  if (prev) { ids.add('m-' + prev.date.slice(0, 7)); ST.tx = ST.tx.filter(t => t.id !== prev.id); }
+  ST.tx.push(row);
+  const okText = prev ? 'تم حفظ التعديل.' : 'تم حفظ القيد.';
+  resetForm();
+  renderAll();
+  await saveNow([...ids], okText, m);
+}
+
+/* ---------- settings ---------- */
+async function changePw(e) {
+  e.preventDefault();
+  const m = $('pwMsg'), cur = $('curPw').value, nw = $('newPw').value, nw2 = $('newPw2').value;
+  if (!cur) { say(m, 'أدخل كلمة المرور الحالية.', 'err'); return; }
+  if (nw.length < 8) { say(m, 'كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل.', 'err'); return; }
+  if (nw !== nw2) { say(m, 'كلمتا المرور الجديدتان غير متطابقتين.', 'err'); return; }
+  $('pwBtn').disabled = true;
+  try {
+    await changePassword(cur, nw);
+    $('curPw').value = ''; $('newPw').value = ''; $('newPw2').value = '';
+    say(m, 'تم تغيير كلمة المرور. استخدمها في المرة القادمة.', 'ok');
+  } catch (err) {
+    if (err instanceof BadPw) say(m, 'كلمة المرور الحالية غير صحيحة.', 'err');
+    else if (err instanceof Conflict) await forceConflictLock();
+    else say(m, 'تعذر تغيير كلمة المرور. تحقق من الاتصال وحاول مجددًا.', 'err');
+  } finally {
+    $('pwBtn').disabled = false;
+  }
+}
+// Without the platform's download capability (the page runs on its own), the backup is a plain file download.
+function saveTextFile(filename, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+async function exportBackup() {
+  const m = $('exportMsg');
+  if (!ST.dl && ST.kind !== 'local') { say(m, 'التنزيل غير متاح في هذه الصفحة.', 'err'); return; }
+  $('exportBtn').disabled = true;
+  say(m, 'جارٍ تجهيز النسخة…', '');
+  try {
+    const json = await exportJson();
+    const filename = 'ledger-backup-' + todayISO() + '.json';
+    if (ST.dl) await ST.dl.save({ filename, data: json });
+    else saveTextFile(filename, json);
+    say(m, 'تم تجهيز النسخة. احفظها في مكان آمن.', 'ok');
+  } catch (err) {
+    if (err instanceof Conflict) await forceConflictLock();
+    else if (err && err.code === 'declined') say(m, 'لم تُحفظ النسخة.', 'err');
+    else say(m, 'تعذر تجهيز النسخة. حاول مرة أخرى.', 'err');
+  } finally {
+    $('exportBtn').disabled = false;
+  }
+}
+async function wipeFrom(button, msgEl, armedFlagSetter) {
+  if (!armedFlagSetter.get()) {
+    armedFlagSetter.set(true);
+    button.textContent = 'اضغط مرة أخرى للحذف النهائي';
+    say(msgEl, 'سيُحذف كل شيء من هذا الحساب ولا يمكن التراجع إلا من نسخة احتياطية.', 'err');
+    return false;
+  }
+  armedFlagSetter.set(false);
+  button.textContent = button === $('wipeBtn') ? 'حذف كل البيانات' : 'حذف الدفتر الحالي';
+  try {
+    await wipeAll();
+    return true;
+  } catch (err) {
+    if (err instanceof Conflict) await forceConflictLock();
+    else say(msgEl, 'تعذر الحذف. حاول مرة أخرى.', 'err');
+    return false;
+  }
+}
+
+/* ---------- accounts ---------- */
+function toggleAddForm(show) {
+  $('accForm').hidden = !show;
+  $('accAdd').setAttribute('aria-expanded', String(show));
+  if (show) $('accName').focus();
+  else { $('accName').value = ''; say($('accMsg'), '', ''); }
+}
+async function onAddAccount(e) {
+  e.preventDefault();
+  const m = $('accMsg'), name = $('accName').value.trim().replace(/\s+/g, ' ');
+  if (!name) { say(m, 'اكتب اسم الحساب.', 'err'); $('accName').focus(); return; }
+  if (name.length > 40) { say(m, 'الاسم طويل، الحد الأقصى 40 حرفًا.', 'err'); return; }
+  if (ST.accounts.some(a => a.name === name)) { say(m, 'يوجد حساب بهذا الاسم.', 'err'); return; }
+  const id = newId();
+  ST.accounts = [...ST.accounts, { id, name }];
+  toggleAddForm(false);
+  if (editId) resetForm();
+  setView(id, cur);
+  await saveNow(['cfg'], 'تمت إضافة الحساب.', $('entryMsg'));
+}
+
+// Deleting a custom account asks twice; its entries go with it. The main account cannot be deleted.
+let armedAcc = false;
+function renderAccDel() {
+  const a = ST.accounts.find(x => x.id === acc);
+  $('accDel').hidden = !a || a.id === MAIN;
+  $('accDel').textContent = armedAcc ? 'تأكيد حذف الحساب' : 'حذف هذا الحساب';
+  if (!armedAcc) say($('accDelMsg'), '', '');
+}
+async function deleteAccount(id) {
+  toggleRenameForm(false);
+  armedAcc = false;
+  if (editId) resetForm();
+  const months = new Set(ST.tx.filter(t => t.a === id).map(t => 'm-' + t.date.slice(0, 7)));
+  ST.tx = ST.tx.filter(t => t.a !== id);
+  ST.accounts = ST.accounts.filter(a => a.id !== id);
+  acc = MAIN;
+  renderAll();
+  await saveNow(['cfg', ...months], 'تم حذف الحساب.', $('entryMsg'));
+}
+
+/* ---------- rename ---------- */
+// Any account can be renamed, the main one included. Names stay unique and at most 40 characters.
+function toggleRenameForm(show) {
+  const a = ST.accounts.find(x => x.id === acc);
+  if (show && !a) return;
+  $('renForm').hidden = !show;
+  $('accRen').setAttribute('aria-expanded', String(show));
+  say($('renMsg'), '', '');
+  if (show) { $('renName').value = a.name; $('renName').focus(); $('renName').select(); }
+}
+async function onRenameAccount(e) {
+  e.preventDefault();
+  const m = $('renMsg'), name = $('renName').value.trim().replace(/\s+/g, ' ');
+  const a = ST.accounts.find(x => x.id === acc);
+  if (!a) return;
+  if (!name) { say(m, 'اكتب اسم الحساب.', 'err'); $('renName').focus(); return; }
+  if (name.length > 40) { say(m, 'الاسم طويل، الحد الأقصى 40 حرفًا.', 'err'); return; }
+  if (name === a.name) { toggleRenameForm(false); return; }
+  if (ST.accounts.some(x => x.name === name)) { say(m, 'يوجد حساب بهذا الاسم.', 'err'); return; }
+  ST.accounts = ST.accounts.map(x => (x.id === a.id ? { id: x.id, name } : x));
+  toggleRenameForm(false);
+  renderAll();
+  await saveNow(['cfg'], 'تم تغيير اسم الحساب.', $('entryMsg'));
+}
+
+/* ---------- wiring ---------- */
+$('gateForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const m = $('gateMsg'), pw = $('pw').value;
+  if (gateMode === 'create') {
+    if (pw.length < 8) { say(m, 'كلمة المرور يجب أن تكون 8 أحرف على الأقل.', 'err'); return; }
+    if (pw !== $('pw2').value) { say(m, 'كلمتا المرور غير متطابقتين.', 'err'); return; }
+    setGateBusy(true, 'جارٍ إنشاء الدفتر…');
+    try { await createVault(pw); enterApp(); }
+    catch (err) {
+      await lockVault(true);
+      say(m, err && err.code === 'invalid_argument'
+        ? 'هذه الصفحة لا تسمح لحسابك بحفظ البيانات. اطلب من صاحبها أن يشاركها معك بصلاحية مساهم أو أعلى.'
+        : 'تعذر إنشاء الدفتر. تحقق من الاتصال وحاول مرة أخرى.', 'err');
+    }
+    finally { setGateBusy(false); }
+    return;
+  }
+  if (!pw) { say(m, 'أدخل كلمة المرور.', 'err'); return; }
+  setGateBusy(true, 'جارٍ فتح الدفتر…');
+  try { await unlock(pw); enterApp(); }
+  catch (err) {
+    if (err instanceof BadPw) {
+      failCount++;
+      say(m, 'كلمة المرور غير صحيحة.', 'err');
+      await sleep(Math.min(failCount, 5) * 500);
+    } else if (err && err.message === 'no vault') {
+      showGate('create');
+    } else {
+      say(m, 'تعذر قراءة بيانات الدفتر. جرّب مرة أخرى، أو استعد نسخة احتياطية.', 'err');
+    }
+  } finally { setGateBusy(false); }
+});
+$('pwToggle').addEventListener('click', () => {
+  const i = $('pw'), show = i.type === 'password';
+  i.type = show ? 'text' : 'password';
+  $('pwToggle').textContent = show ? 'إخفاء' : 'إظهار';
+});
+$('resetBtn2').addEventListener('click', async () => {
+  const done = await wipeFrom($('resetBtn2'), $('resetMsg2'), {
+    get: () => armedReset, set: v => { armedReset = v; }
+  });
+  if (done) showGate('create', 'تم حذف الدفتر. أنشئ دفترًا جديدًا أو استعد نسخة احتياطية.', '');
+});
+$('restoreFile').addEventListener('change', async () => {
+  pendingBackup = null; armedRestore = false; $('restoreBtn').textContent = 'استعادة الدفتر';
+  const f = $('restoreFile').files[0];
+  if (!f) return;
+  try {
+    pendingBackup = parseBackup(await f.text());
+    say($('restoreMsg'), 'تم قراءة الملف. أدخل كلمة مرور النسخة ثم اضغط استعادة.', '');
+  } catch (e) {
+    say($('restoreMsg'), 'هذا الملف ليس نسخة احتياطية صالحة من هذا التطبيق.', 'err');
+  }
+});
+$('restoreBtn').addEventListener('click', async () => {
+  const m = $('restoreMsg'), pw = $('restorePw').value;
+  if (!pendingBackup) { say(m, 'اختر ملف النسخة أولًا.', 'err'); return; }
+  if (!pw) { say(m, 'أدخل كلمة مرور النسخة.', 'err'); return; }
+  if (gateMode === 'unlock' && !armedRestore) {
+    armedRestore = true;
+    $('restoreBtn').textContent = 'تأكيد: استبدال الدفتر الحالي';
+    say(m, 'سيُستبدل الدفتر الحالي بالنسخة، وتصبح كلمة مرورها هي كلمة المرور.', 'err');
+    return;
+  }
+  $('restoreBtn').disabled = true;
+  try { await restoreBackup(pendingBackup, pw); enterApp(); }
+  catch (err) {
+    if (err instanceof BadPw) say(m, 'كلمة مرور النسخة غير صحيحة.', 'err');
+    else say(m, 'تعذر استعادة النسخة. تأكد من الملف وحاول مرة أخرى.', 'err');
+  } finally { $('restoreBtn').disabled = false; }
+});
+$('tI').addEventListener('click', () => { if (editId) resetForm(); setType('i'); });
+$('tE').addEventListener('click', () => { if (editId) resetForm(); setType('e'); });
+$('curL').addEventListener('click', () => { if (editId) resetForm(); setView(acc, 'LYD'); });
+$('curU').addEventListener('click', () => { if (editId) resetForm(); setView(acc, 'USD'); });
+$('accTabs').addEventListener('click', e => {
+  const b = e.target.closest('button[data-acc]');
+  if (!b) return;
+  if (editId) resetForm();
+  setView(b.dataset.acc, cur);
+});
+$('accAdd').addEventListener('click', () => toggleAddForm($('accForm').hidden));
+$('accCancel').addEventListener('click', () => toggleAddForm(false));
+$('accRen').addEventListener('click', () => toggleRenameForm($('renForm').hidden));
+$('renCancel').addEventListener('click', () => toggleRenameForm(false));
+$('renForm').addEventListener('submit', onRenameAccount);
+$('accForm').addEventListener('submit', onAddAccount);
+$('accDel').addEventListener('click', async () => {
+  const a = ST.accounts.find(x => x.id === acc);
+  if (!a || a.id === MAIN) return;
+  if (!armedAcc) {
+    armedAcc = true;
+    renderAccDel();
+    const n = ST.tx.filter(t => t.a === a.id).length;
+    say($('accDelMsg'), 'سيُحذف الحساب «' + a.name + '»' + (n ? ' وكل قيوده (' + n + ')' : ' وليس فيه قيود') + ' نهائيًا. اضغط الزر مرة أخرى للتأكيد.', 'err');
+    return;
+  }
+  await deleteAccount(a.id);
+});
+$('cancelEdit').addEventListener('click', resetForm);
+$('entryForm').addEventListener('submit', onSave);
+$('rows').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-act]');
+  if (!b) return;
+  const id = b.dataset.id, act = b.dataset.act;
+  if (act === 'edit') { startEdit(id); return; }
+  if (act === 'keep') { armedDel = null; renderRows(); return; }
+  if (act === 'del') {
+    if (armedDel !== id) { armedDel = id; renderRows(); return; }
+    armedDel = null;
+    const t = ST.tx.find(x => x.id === id);
+    if (!t) return;
+    ST.tx = ST.tx.filter(x => x.id !== id);
+    if (editId === id) resetForm();
+    renderAll();
+    await saveNow(['m-' + t.date.slice(0, 7)], null, null);
+  }
+});
+$('more').addEventListener('click', () => { shown += 20; renderRows(); });
+document.querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => {
+  filter = b.dataset.f; shown = 20;
+  document.querySelectorAll('[data-f]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  renderRows();
+}));
+function setPeriod(p) {
+  period = p;
+  $('pMonth').setAttribute('aria-pressed', String(p === 'month'));
+  $('pAll').setAttribute('aria-pressed', String(p === 'all'));
+  renderDonut();
+}
+$('pMonth').addEventListener('click', () => setPeriod('month'));
+$('pAll').addEventListener('click', () => setPeriod('all'));
+$('pwForm').addEventListener('submit', changePw);
+$('exportBtn').addEventListener('click', exportBackup);
+$('wipeBtn').addEventListener('click', async () => {
+  const done = await wipeFrom($('wipeBtn'), $('wipeMsg'), { get: () => armedWipe, set: v => { armedWipe = v; } });
+  if (done) showGate('create', 'تم حذف كل البيانات. أنشئ دفترًا جديدًا.', '');
+});
+$('btnLock').addEventListener('click', async () => {
+  const ok = await lockVault(false);
+  if (ok) showGate('unlock', '', '');
+  else showBanner('تعذر حفظ آخر التغييرات، لذلك لم يُقفل الدفتر. اضغط إعادة المحاولة.');
+});
+$('bannerRetry').addEventListener('click', () => saveNow([], '', null));
+['pointerdown', 'keydown', 'input'].forEach(ev => document.addEventListener(ev, resetIdle, { passive: true }));
+
+/* ---------- start ---------- */
+async function boot() {
+  showGate('loading');
+  await initBackend();
+  if (ST.kind === 'none') { showGate('none'); return; }
+  try {
+    const docs = await listAll();
+    showGate(docs.has('meta') || legacyRaw() ? 'unlock' : 'create');
+  } catch (e) {
+    showGate('unlock', 'تعذر الوصول إلى التخزين. تحقق من الاتصال ثم أعد تحميل الصفحة.', 'err');
+  }
+}
+boot();
+</script>
+<script>addEventListener('load', () => { if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {}); });</script>
+</body>
+</html>
