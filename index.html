@@ -16,6 +16,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
+<!-- Firebase (sign-in and cloud sync). Only used when FB_CONFIG is filled in; the app works without them. -->
+<script defer src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-app-compat.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-auth-compat.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-firestore-compat.js"></script>
 <style>
 /* A bookkeeper's ledger. The net balance is a ruled total at the top, entries are hairline rows, and the charts restate the same figures. Two columns from 960px: figures and entry on the left; charts, ledger and settings on the right. */
 :root{
@@ -227,6 +231,20 @@ table.data .n{text-align:end;direction:ltr}
       </div>
     </details>
 
+    <details id="syncBox" class="gate-extra" hidden>
+      <summary>الدخول بحساب المزامنة</summary>
+      <div>
+        <label for="syncUser">اسم المستخدم</label>
+        <input id="syncUser" type="text" autocomplete="username" autocapitalize="none" maxlength="20">
+        <div class="field">
+          <label for="syncPw">كلمة المرور</label>
+          <input id="syncPw" type="password" autocomplete="current-password">
+        </div>
+        <p id="syncMsg" class="msg" role="alert"></p>
+        <button id="syncBtn" class="btn ghost" type="button">دخول وفتح الدفتر</button>
+      </div>
+    </details>
+
     <details id="forgotBox" class="gate-extra" hidden>
       <summary>نسيت كلمة المرور؟</summary>
       <div>
@@ -424,6 +442,28 @@ table.data .n{text-align:end;direction:ltr}
         </div>
 
         <div class="set-block">
+          <h3>المزامنة بين الأجهزة</h3>
+          <div id="syncPanelIn" hidden>
+            <p class="hint">متصل كـ <span id="syncWho" class="ltr"></span>. التغييرات تُحفظ على السحابة مشفّرة، وتظهر على الأجهزة الأخرى عند فتح الدفتر فيها.</p>
+            <div class="actions" style="margin-top:8px"><button id="syncLogout" class="btn ghost" type="button">تسجيل الخروج من المزامنة</button></div>
+          </div>
+          <div id="syncPanelOut" hidden>
+            <p class="hint">فعّل المزامنة لتفتح دفترك من أي جهاز باسم مستخدم وكلمة مرور. كلمة المرور هي نفس كلمة مرور الدفتر.</p>
+            <div class="field">
+              <label for="syncNewUser">اسم المستخدم (حروف إنجليزية وأرقام و_ ، من 3 إلى 20)</label>
+              <input id="syncNewUser" type="text" autocomplete="username" autocapitalize="none" maxlength="20">
+            </div>
+            <div class="field">
+              <label for="syncNewPw">كلمة مرور الدفتر الحالية</label>
+              <input id="syncNewPw" type="password" autocomplete="current-password">
+            </div>
+            <div class="actions" style="margin-top:8px"><button id="syncEnable" class="btn" type="button">تفعيل المزامنة</button></div>
+          </div>
+          <p id="syncSetMsg" class="msg" role="status"></p>
+          <p id="syncNote" class="hint" hidden>المزامنة غير مفعّلة في هذه النسخة بعد.</p>
+        </div>
+
+        <div class="set-block">
           <h3>حذف البيانات</h3>
           <p class="hint">يحذف كل القيود والإعدادات من هذا الحساب. لا يمكن التراجع عن ذلك إلا من نسخة احتياطية.</p>
           <div class="actions" style="margin-top:8px"><button id="wipeBtn" class="btn danger" type="button">حذف كل البيانات</button></div>
@@ -446,6 +486,9 @@ const LEGACY = 'ledger.vault.v1';    // first version's single encrypted blob
 const ITER = 310000;                 // PBKDF2-SHA256 iterations (OWASP guidance)
 const MAIN = 'main';                 // account that every older entry belongs to
 const DEF_RATE = 5.5;                // starting value; the user edits it
+// Firebase web-app config, pasted here during setup. null keeps the app local-only (no sync).
+const FB_CONFIG = null;
+const FB = { auth: null, db: null };
 const CAT_I = ['راتب', 'عمل حر', 'هدايا', 'استثمار', 'أخرى'];
 const CAT_E = [['طعام', 'c1'], ['سكن', 'c2'], ['مواصلات', 'c3'], ['فواتير', 'c4'], ['صحة', 'c5'],
                ['تعليم', 'c6'], ['تسوق', 'c7'], ['ترفيه', 'c8'], ['أخرى', 'cx']];
@@ -508,7 +551,27 @@ const ST = {
 };
 
 /* ---------- backend selection ---------- */
+function initCloud() {
+  if (!FB_CONFIG || typeof firebase === 'undefined') return false;
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
+    FB.auth = firebase.auth();
+    FB.db = firebase.firestore();
+    FB.db.enablePersistence({ synchronizeTabs: true }).catch(() => { /* private mode: online only */ });
+    return true;
+  } catch (e) { return false; }
+}
+function firstAuthState() {
+  return new Promise(resolve => {
+    const off = FB.auth.onAuthStateChanged(u => { off(); resolve(u); }, () => resolve(null));
+  });
+}
+
 async function initBackend() {
+  if (initCloud()) {
+    const user = await firstAuthState();
+    if (user) { ST.kind = 'cloud'; ST.uid = user.uid; return; }
+  }
   const c = window.claude;
   if (c && typeof c.use === 'function') {
     try { ST.dl = await c.use('downloads'); } catch (e) { ST.dl = null; }
@@ -533,7 +596,10 @@ async function initBackend() {
 const docPath = id => 'data/users/' + ST.uid + '/' + id;
 async function listAll() {
   const out = new Map();
-  if (ST.kind === 'db') {
+  if (ST.kind === 'cloud') {
+    const snap = await cloudCol().get();
+    for (const d of snap.docs) out.set(d.id, d.data());
+  } else if (ST.kind === 'db') {
     const snap = await ST.db.collection('data/users/' + ST.uid).get();
     for (const d of snap.docs) if (d.exists) out.set(d.id, d.data());
   } else {
@@ -545,6 +611,10 @@ async function listAll() {
   return out;
 }
 async function readOne(id) {
+  if (ST.kind === 'cloud') {
+    const s = await cloudCol().doc(id).get();
+    return s.exists ? s.data() : null;
+  }
   if (ST.kind === 'db') {
     const s = await ST.db.doc(docPath(id)).get();
     return s.exists ? s.data() : null;
@@ -553,21 +623,32 @@ async function readOne(id) {
   return raw ? JSON.parse(raw) : null;
 }
 async function writeRaw(id, body) {
-  if (ST.kind === 'db') await ST.db.doc(docPath(id)).set(body);
+  if (ST.kind === 'cloud') await cloudCol().doc(id).set(body);
+  else if (ST.kind === 'db') await ST.db.doc(docPath(id)).set(body);
   else localStorage.setItem(PFX + id, JSON.stringify(body));
 }
 async function deleteRaw(id) {
-  if (ST.kind === 'db') await ST.db.doc(docPath(id)).delete();
+  if (ST.kind === 'cloud') await cloudCol().doc(id).delete();
+  else if (ST.kind === 'db') await ST.db.doc(docPath(id)).delete();
   else localStorage.removeItem(PFX + id);
 }
 /* Revision checks: a write is refused if the stored revision is not the one
    this page last saw, so a stale tab cannot silently overwrite another device. */
 async function putDoc(id, body) {
-  const cur = await readOne(id);
-  const known = ST.rev.get(id) || 0;
-  if (((cur && cur.rev) || 0) !== known) throw new Conflict(id);
-  const next = known + 1;
-  await writeRaw(id, { ...body, rev: next });
+  const known = ST.rev.get(id) || 0, next = known + 1;
+  if (ST.kind === 'cloud') {
+    // Read and write in one transaction, so two phones cannot both claim the same revision.
+    // Offline, the transaction fails and the save banner asks the user to retry.
+    await FB.db.runTransaction(async tx => {
+      const ref = cloudCol().doc(id), s = await tx.get(ref);
+      if (((s.exists && s.data().rev) || 0) !== known) throw new Conflict(id);
+      tx.set(ref, { ...body, rev: next });
+    });
+  } else {
+    const cur = await readOne(id);
+    if (((cur && cur.rev) || 0) !== known) throw new Conflict(id);
+    await writeRaw(id, { ...body, rev: next });
+  }
   ST.rev.set(id, next);
 }
 async function dropDoc(id) {
@@ -707,6 +788,7 @@ async function changePassword(cur, nw) {
   const meta = docs.get('meta');
   if (!meta) throw new Error('no vault');
   try { await openBytes(await kdf(cur, unb64(meta.s)), { iv: meta.wi, d: meta.w }); } catch (e) { throw new BadPw(); }
+  if (ST.kind === 'cloud') await FB.auth.currentUser.updatePassword(nw);   // the login password is the same one
   const salt = rnd(16), kek = await kdf(nw, salt);
   await op(async () => {
     await putDoc('meta', await metaFor(kek, salt, ST.dekRaw));
@@ -812,6 +894,7 @@ function showGate(mode, msg, kind) {
   $('pwBox').hidden = mode !== 'create';
   $('gateForm').hidden = mode === 'none' || mode === 'loading';
   $('restoreBox').hidden = mode === 'none' || mode === 'loading';
+  $('syncBox').hidden = !FB_CONFIG || ST.kind === 'cloud' || mode === 'none' || mode === 'loading';
   $('forgotBox').hidden = mode !== 'unlock';
   $('gateBtn').textContent = mode === 'create' ? 'إنشاء الدفتر' : 'فتح الدفتر';
   $('gateLead').textContent = {
@@ -836,7 +919,8 @@ function enterApp() {
   $('pw').value = ''; $('pw2').value = ''; failCount = 0;
   $('gate').hidden = true; $('app').hidden = false; $('btnLock').hidden = false;
   ST.unlocked = true; armedDel = null;
-  $('exportBtn').hidden = !(ST.dl || ST.kind === 'local');
+  $('exportBtn').hidden = !(ST.dl || ST.kind === 'local' || ST.kind === 'cloud');
+  renderSync();
   $('storeInfo').textContent = storeNote();
   if (!ST.accounts.some(a => a.id === acc)) acc = MAIN;
   $('date').value = todayISO();
@@ -1116,6 +1200,7 @@ async function changePw(e) {
   } catch (err) {
     if (err instanceof BadPw) say(m, 'كلمة المرور الحالية غير صحيحة.', 'err');
     else if (err instanceof Conflict) await forceConflictLock();
+    else if (err && err.code === 'auth/requires-recent-login') say(m, 'سجّل الخروج من المزامنة ثم ادخل من جديد، وبعدها أعد تغيير كلمة المرور.', 'err');
     else say(m, 'تعذر تغيير كلمة المرور. تحقق من الاتصال وحاول مجددًا.', 'err');
   } finally {
     $('pwBtn').disabled = false;
@@ -1165,6 +1250,62 @@ async function wipeFrom(button, msgEl, armedFlagSetter) {
     else say(msgEl, 'تعذر الحذف. حاول مرة أخرى.', 'err');
     return false;
   }
+}
+
+/* ---------- sync: sign-in account + encrypted documents in the cloud ---------- */
+const USER_RE = /^[a-z0-9_]{3,20}$/;
+const userEmail = u => u + '@daftar-almal.app';     // internal login address; no mail is ever sent to it
+const userFromEmail = e => String(e || '').split('@')[0];
+const cloudCol = () => FB.db.collection('vaults').doc(ST.uid).collection('docs');
+const cloudSetRaw = (id, body) => cloudCol().doc(id).set(body);
+function syncErr(err) {
+  const c = (err && err.code) || '';
+  if (c === 'auth/invalid-credential' || c === 'auth/invalid-login-credentials' || c === 'auth/wrong-password' || c === 'auth/user-not-found')
+    return 'اسم المستخدم أو كلمة المرور غير صحيحة.';
+  if (c === 'auth/network-request-failed' || c === 'unavailable') return 'تعذر الوصول إلى الخادم. تحقق من الاتصال وحاول مرة أخرى.';
+  if (c === 'auth/too-many-requests') return 'محاولات كثيرة. انتظر بضع دقائق ثم حاول مرة أخرى.';
+  if (c === 'permission-denied') return 'الخادم يرفض الحفظ. تأكد من إعداد قواعد Firestore كما في الدليل.';
+  return 'تعذر تنفيذ العملية. حاول مرة أخرى.';
+}
+async function signInCloud(username, pw) {
+  await FB.auth.signInWithEmailAndPassword(userEmail(username), pw);
+  ST.kind = 'cloud'; ST.uid = FB.auth.currentUser.uid;
+}
+// Turns this phone's local vault into a cloud account. The vault password is checked first,
+// so the cloud copy can never be created with a password that does not open the vault.
+async function enableSync(username, pw) {
+  const docs = await listAll();              // the local copy, still on this phone
+  await verifyBackup(docs, pw);              // wrong password stops here (throws BadPw)
+  let cred;
+  try { cred = await FB.auth.createUserWithEmailAndPassword(userEmail(username), pw); }
+  catch (err) {
+    if (!err || err.code !== 'auth/email-already-in-use') throw err;
+    try { cred = await FB.auth.signInWithEmailAndPassword(userEmail(username), pw); }   // an earlier try that stopped half way
+    catch (e2) { throw new Error('taken'); }                                             // that name has another password
+  }
+  ST.kind = 'cloud'; ST.uid = cred.user.uid;
+  try {
+    for (const [id, body] of docs) await cloudSetRaw(id, body);
+  } catch (err) {
+    ST.kind = 'local'; ST.uid = null;
+    await FB.auth.signOut().catch(() => {});
+    throw err;
+  }
+  for (const id of docs.keys()) localStorage.removeItem(PFX + id);   // now the cloud holds them
+  try { localStorage.removeItem(LEGACY); } catch (e) { /* ignore */ }
+}
+// Clears this phone's cached copy and signs out. Reloads so the app starts clean.
+async function logoutSync() {
+  try { await FB.db.terminate(); await FB.db.clearPersistence(); } catch (e) { /* ignore */ }
+  try { await FB.auth.signOut(); } catch (e) { /* ignore */ }
+  location.reload();
+}
+function renderSync() {
+  const on = ST.kind === 'cloud';
+  $('syncPanelIn').hidden = !on;
+  $('syncPanelOut').hidden = on || !FB_CONFIG;
+  $('syncNote').hidden = !!FB_CONFIG;
+  if (on && FB.auth && FB.auth.currentUser) $('syncWho').textContent = userFromEmail(FB.auth.currentUser.email);
 }
 
 /* ---------- accounts ---------- */
@@ -1369,6 +1510,49 @@ $('pAll').addEventListener('click', () => setPeriod('all'));
 $('pwForm').addEventListener('submit', changePw);
 $('exportBtn').addEventListener('click', exportBackup);
 $('stBtn').addEventListener('click', printStatement);
+$('syncBtn').addEventListener('click', async () => {
+  const m = $('syncMsg'), u = $('syncUser').value.trim().toLowerCase(), pw = $('syncPw').value;
+  if (!USER_RE.test(u)) { say(m, 'اسم المستخدم: حروف إنجليزية وأرقام و_ فقط، من 3 إلى 20.', 'err'); return; }
+  if (!pw) { say(m, 'أدخل كلمة المرور.', 'err'); return; }
+  setGateBusy(true, 'جارٍ تسجيل الدخول…');
+  try {
+    await signInCloud(u, pw);
+    const docs = await listAll();
+    if (!docs.has('meta')) {
+      await FB.auth.signOut().catch(() => {});
+      ST.kind = 'none'; ST.uid = null;
+      say(m, 'لا يوجد دفتر في هذا الحساب بعد. أنشئ دفترك هنا ثم فعّل المزامنة من الإعدادات.', 'err');
+      return;
+    }
+    await unlock(pw);
+    $('syncPw').value = ''; say(m, '', '');
+    enterApp();
+  } catch (err) {
+    if (err instanceof BadPw) say(m, 'كلمة المرور لا تفتح دفتر هذا الحساب.', 'err');
+    else say(m, syncErr(err), 'err');
+  } finally { setGateBusy(false); }
+});
+$('syncEnable').addEventListener('click', async () => {
+  const m = $('syncSetMsg'), u = $('syncNewUser').value.trim().toLowerCase(), pw = $('syncNewPw').value;
+  if (!USER_RE.test(u)) { say(m, 'اسم المستخدم: حروف إنجليزية وأرقام و_ فقط، من 3 إلى 20.', 'err'); return; }
+  if (!pw) { say(m, 'أدخل كلمة مرور الدفتر.', 'err'); return; }
+  $('syncEnable').disabled = true;
+  try {
+    await enableSync(u, pw);
+    $('syncNewPw').value = '';
+    renderSync();
+    say(m, 'تم تفعيل المزامنة. افتح الدفتر من أي جهاز باسم المستخدم وكلمة المرور.', 'ok');
+  } catch (err) {
+    if (err instanceof BadPw) say(m, 'كلمة مرور الدفتر غير صحيحة.', 'err');
+    else if (err && err.message === 'taken') say(m, 'اسم المستخدم مأخوذ بكلمة مرور أخرى. اختر اسمًا غيره.', 'err');
+    else say(m, syncErr(err), 'err');
+  } finally { $('syncEnable').disabled = false; }
+});
+$('syncLogout').addEventListener('click', async () => {
+  if (ST.pending || ST.dirty.size) { say($('syncSetMsg'), 'انتظر حتى يكتمل الحفظ، ثم حاول مرة أخرى.', 'err'); return; }
+  if (!confirm('سيُمسح الدفتر من هذا الجهاز، ويبقى محفوظًا في السحابة. تكمل؟')) return;
+  await logoutSync();
+});
 $('wipeBtn').addEventListener('click', async () => {
   const done = await wipeFrom($('wipeBtn'), $('wipeMsg'), { get: () => armedWipe, set: v => { armedWipe = v; } });
   if (done) showGate('create', 'تم حذف كل البيانات. أنشئ دفترًا جديدًا.', '');
@@ -1393,7 +1577,8 @@ async function boot() {
     showGate('unlock', 'تعذر الوصول إلى التخزين. تحقق من الاتصال ثم أعد تحميل الصفحة.', 'err');
   }
 }
-boot();
+// 'load' waits for the Firebase scripts (deferred), so the cloud check sees them.
+addEventListener('load', boot);
 </script>
 <script>addEventListener('load', () => { if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {}); });</script>
 </body>
