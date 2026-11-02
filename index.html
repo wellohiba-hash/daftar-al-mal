@@ -96,7 +96,8 @@ h3{font:600 14px/1.4 var(--f-ui);margin-bottom:8px}
 .field{margin-top:12px;min-width:0}
 label{display:block;font-size:13px;color:var(--ink-2);margin-bottom:4px}
 input,select{font:400 15px var(--f-ui);color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:8px;width:100%;min-height:44px;padding:9px 12px;min-width:0}
-input[type="date"]{direction:ltr}
+/* iOS Safari sizes native date fields to their content and pushes them past the card edge; this keeps them inside their cell. */
+input[type="date"]{direction:ltr;-webkit-appearance:none;appearance:none;display:block;width:100%;max-width:100%;min-width:0;text-align:start;font-variant-numeric:tabular-nums}
 .suffix-wrap{position:relative}
 .suffix-wrap input{padding-inline-end:58px}
 .suffix{position:absolute;inset-inline-end:12px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--mute);pointer-events:none}
@@ -155,6 +156,27 @@ table.data .n{text-align:end;direction:ltr}
 .banner{margin-bottom:16px;padding:10px 14px;border-radius:8px;background:var(--bad-bg);display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:14px}
 .settings{border-top:1px solid var(--rule);padding-top:12px;margin-top:24px}
 .set-block{padding:14px 0;border-top:1px solid var(--grid)}
+/* Account statement: hidden on screen, shown alone when printing (Print → Save as PDF). */
+.statement{display:none}
+.st-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:12px}
+.st-head h1{font:700 22px/1.3 var(--f-display);margin:0}
+.st-meta{font-size:12px;color:#333;text-align:start}
+.st-sum{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px;font-size:12px}
+.st-sum div{border:1px solid #bbb;border-radius:6px;padding:6px 8px}
+.st-sum b{display:block;font:700 14px var(--f-ui);direction:ltr;text-align:start}
+.statement table{width:100%;border-collapse:collapse;font-size:12px}
+.statement th,.statement td{border-bottom:1px solid #ccc;padding:5px 6px;text-align:start;vertical-align:top}
+.statement thead th{border-bottom:2px solid #000}
+.statement .n{text-align:end;direction:ltr;font-variant-numeric:tabular-nums;white-space:nowrap}
+.statement tfoot td{font-weight:700;border-top:2px solid #000;border-bottom:0}
+@media print{
+  @page{size:A4;margin:14mm}
+  body{background:#fff;color:#000;padding:0;font-size:12px}
+  .app{display:none!important}
+  .statement{display:block!important;color:#000;background:#fff}
+  .statement tr{break-inside:avoid}
+  .statement thead{display:table-header-group}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
@@ -352,6 +374,23 @@ table.data .n{text-align:end;direction:ltr}
         <button id="more" class="btn ghost more" type="button" hidden>عرض المزيد</button>
       </section>
 
+      <section class="panel" aria-labelledby="stH">
+        <h2 id="stH">كشف الحساب</h2>
+        <p class="hint">كشف للحساب المفتوح حاليًا بالعملة المختارة. اترك التاريخ فارغًا لطباعة كل القيود، ثم من نافذة الطباعة اختر «حفظ كـ PDF».</p>
+        <div class="grid2">
+          <div class="field">
+            <label for="stFrom">من تاريخ</label>
+            <input id="stFrom" type="date">
+          </div>
+          <div class="field">
+            <label for="stTo">إلى تاريخ</label>
+            <input id="stTo" type="date">
+          </div>
+        </div>
+        <div class="actions"><button id="stBtn" class="btn" type="button">طباعة الكشف / حفظ PDF</button></div>
+        <p id="stMsg" class="msg" role="status"></p>
+      </section>
+
       <details id="settings" class="settings">
         <summary>الإعدادات</summary>
 
@@ -397,6 +436,7 @@ table.data .n{text-align:end;direction:ltr}
   </div>
 </main>
 </div>
+<section id="statement" class="statement" dir="rtl" lang="ar" aria-label="كشف الحساب"></section>
 
 <script>
 'use strict';
@@ -941,6 +981,52 @@ function renderAll() {
   renderAccounts(); renderTotals(); renderDonut(); renderBars(); renderRows();
 }
 
+/* ---------- account statement (print / save as PDF) ---------- */
+function buildStatement(from, to) {
+  const list = ST.tx.filter(inView).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.ts - b.ts);
+  const who = (ST.accounts.find(a => a.id === acc) || { name: '' }).name;
+  let run = 0;
+  for (const t of list) if (from && t.date < from) run += t.t === 'i' ? t.amt : -t.amt;
+  const opening = run;
+  let inc = 0, exp = 0, body = '';
+  for (const t of list) {
+    if (from && t.date < from) continue;
+    if (to && t.date > to) continue;
+    const isIn = t.t === 'i';
+    if (isIn) { inc += t.amt; run += t.amt; } else { exp += t.amt; run -= t.amt; }
+    body += `<tr><td class="ltr">${esc(t.date)}</td><td>${isIn ? 'دخول' : 'خروج'}</td><td>${esc(t.cat)}</td><td>${esc(t.note || '')}</td><td class="n">${isIn ? money(t.amt) : ''}</td><td class="n">${isIn ? '' : money(t.amt)}</td><td class="n">${money(run)}</td></tr>`;
+  }
+  const period = from || to ? `من ${from || 'البداية'} إلى ${to || 'اليوم'}` : 'كل الفترات';
+  const empty = body ? '' : '<tr><td colspan="7" class="empty">لا توجد قيود في هذه الفترة.</td></tr>';
+  return `
+    <div class="st-head">
+      <div><h1>كشف حساب: ${esc(who)}</h1><div class="st-meta">العملة: ${cur === 'USD' ? 'الدولار (USD)' : 'الدينار (LYD)'}</div></div>
+      <div class="st-meta">${esc(period)}<br>تاريخ الطباعة: <span class="ltr">${todayISO()}</span></div>
+    </div>
+    <div class="st-sum">
+      <div>الرصيد الافتتاحي<b>${money(opening)} ${cur}</b></div>
+      <div>إجمالي الدخول<b>${money(inc)} ${cur}</b></div>
+      <div>إجمالي الخروج<b>${money(exp)} ${cur}</b></div>
+      <div>الرصيد الختامي<b>${money(run)} ${cur}</b></div>
+    </div>
+    <table>
+      <thead><tr><th>التاريخ</th><th>النوع</th><th>الفئة</th><th>ملاحظة</th><th class="n">دخول</th><th class="n">خروج</th><th class="n">الرصيد</th></tr></thead>
+      <tbody>${body}${empty}</tbody>
+    </table>`;
+}
+function printStatement() {
+  const m = $('stMsg');
+  const from = $('stFrom').value, to = $('stTo').value;
+  say(m, '', '');
+  if (from && to && from > to) { say(m, 'تاريخ البداية بعد تاريخ النهاية.', 'err'); return; }
+  $('statement').innerHTML = buildStatement(from, to);
+  // Give the browser a tick to lay out the statement before the print dialog opens.
+  setTimeout(() => {
+    try { window.print(); }
+    catch (e) { say(m, 'تعذرت الطباعة في هذا المتصفح. جرّب من متصفح آخر.', 'err'); }
+  }, 50);
+}
+
 /* ---------- entry form ---------- */
 function setType(t) {
   type = t;
@@ -1282,6 +1368,7 @@ $('pMonth').addEventListener('click', () => setPeriod('month'));
 $('pAll').addEventListener('click', () => setPeriod('all'));
 $('pwForm').addEventListener('submit', changePw);
 $('exportBtn').addEventListener('click', exportBackup);
+$('stBtn').addEventListener('click', printStatement);
 $('wipeBtn').addEventListener('click', async () => {
   const done = await wipeFrom($('wipeBtn'), $('wipeMsg'), { get: () => armedWipe, set: v => { armedWipe = v; } });
   if (done) showGate('create', 'تم حذف كل البيانات. أنشئ دفترًا جديدًا.', '');
