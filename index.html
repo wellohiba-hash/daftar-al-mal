@@ -487,7 +487,14 @@ const ITER = 310000;                 // PBKDF2-SHA256 iterations (OWASP guidance
 const MAIN = 'main';                 // account that every older entry belongs to
 const DEF_RATE = 5.5;                // starting value; the user edits it
 // Firebase web-app config, pasted here during setup. null keeps the app local-only (no sync).
-const FB_CONFIG = null;
+const FB_CONFIG = {
+  apiKey: "AIzaSyAYvvGx0IB0u1qAS0fvoDiQxHpcwUXyGrw",
+  authDomain: "daftar-99459.firebaseapp.com",
+  projectId: "daftar-99459",
+  storageBucket: "daftar-99459.firebasestorage.app",
+  messagingSenderId: "1002420028395",
+  appId: "1:1002420028395:web:8d268b9d7c6057086b4fae"
+};
 const FB = { auth: null, db: null };
 const CAT_I = ['راتب', 'عمل حر', 'هدايا', 'استثمار', 'أخرى'];
 const CAT_E = [['طعام', 'c1'], ['سكن', 'c2'], ['مواصلات', 'c3'], ['فواتير', 'c4'], ['صحة', 'c5'],
