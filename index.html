@@ -807,6 +807,7 @@ async function lockVault(force) {
     try { await op(flushDirty); }
     catch (e) { if (!force) return false; }
   }
+  stopLive();
   Object.assign(ST, { dek: null, dekRaw: null, kek: null, salt: null, accounts: [], tx: [], rev: new Map(), dirty: new Set(), unlocked: false });
   return true;
 }
@@ -928,6 +929,7 @@ function enterApp() {
   ST.unlocked = true; armedDel = null;
   $('exportBtn').hidden = !(ST.dl || ST.kind === 'local' || ST.kind === 'cloud');
   renderSync();
+  startLive();
   $('storeInfo').textContent = storeNote();
   if (!ST.accounts.some(a => a.id === acc)) acc = MAIN;
   $('date').value = todayISO();
@@ -1265,6 +1267,38 @@ const userEmail = u => u + '@daftar-almal.app';     // internal login address; n
 const userFromEmail = e => String(e || '').split('@')[0];
 const cloudCol = () => FB.db.collection('vaults').doc(ST.uid).collection('docs');
 const cloudSetRaw = (id, body) => cloudCol().doc(id).set(body);
+// Live updates: when another device saves, this page reloads the ledger without a manual lock/unlock.
+let cloudUnsub = null;
+function stopLive() { if (cloudUnsub) { cloudUnsub(); cloudUnsub = null; } }
+function startLive() {
+  stopLive();
+  if (ST.kind !== 'cloud') return;
+  cloudUnsub = cloudCol().onSnapshot(snap => {
+    // Ignore our own writes, and never change the screen while the user is typing, editing or saving.
+    if (!ST.unlocked || snap.metadata.hasPendingWrites || ST.dirty.size || ST.pending || editId) return;
+    const docs = new Map(snap.docs.map(d => [d.id, d.data()]));
+    const changed = docs.size !== ST.rev.size || [...docs].some(([id, b]) => (ST.rev.get(id) ?? -1) !== (b.rev || 0));
+    if (changed) applyRemote(docs).catch(() => { /* keep what is on screen */ });
+  }, () => { /* offline or access problem: the page keeps what it has */ });
+}
+async function applyRemote(docs) {
+  if (!docs.has('meta') || !ST.dek) return;
+  let rate = ST.rate, accounts = ST.accounts;
+  const tx = [], rev = new Map();
+  if (docs.has('cfg')) { const c = await openJson(ST.dek, docs.get('cfg')); if (c && c.rate > 0) rate = c.rate; if (c) accounts = cleanAccounts(c.acc); }
+  for (const [id, body] of docs) {
+    rev.set(id, body.rev || 0);
+    if (id.startsWith('m-')) {
+      for (const t of await openJson(ST.dek, body)) {
+        const n = normTx(t, rate);
+        if (n) { if (!accounts.some(a => a.id === n.a)) n.a = MAIN; tx.push(n); }
+      }
+    }
+  }
+  Object.assign(ST, { rate, accounts, tx, rev });
+  if (!ST.accounts.some(a => a.id === acc)) acc = MAIN;
+  renderAll();
+}
 function syncErr(err) {
   const c = (err && err.code) || '';
   if (c === 'auth/invalid-credential' || c === 'auth/invalid-login-credentials' || c === 'auth/wrong-password' || c === 'auth/user-not-found')
@@ -1300,6 +1334,7 @@ async function enableSync(username, pw) {
   }
   for (const id of docs.keys()) localStorage.removeItem(PFX + id);   // now the cloud holds them
   try { localStorage.removeItem(LEGACY); } catch (e) { /* ignore */ }
+  startLive();
 }
 // Clears this phone's cached copy and signs out. Reloads so the app starts clean.
 async function logoutSync() {
