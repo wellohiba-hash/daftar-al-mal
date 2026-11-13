@@ -1301,6 +1301,9 @@ async function applyRemote(docs) {
 }
 function syncErr(err) {
   const c = (err && err.code) || '';
+  return syncErrText(c) + (c ? ' [' + c + ']' : '');   // the code helps find a setup problem
+}
+function syncErrText(c) {
   if (c === 'auth/invalid-credential' || c === 'auth/invalid-login-credentials' || c === 'auth/wrong-password' || c === 'auth/user-not-found')
     return 'اسم المستخدم أو كلمة المرور غير صحيحة.';
   if (c === 'auth/network-request-failed' || c === 'unavailable') return 'تعذر الوصول إلى الخادم. تحقق من الاتصال وحاول مرة أخرى.';
@@ -1445,7 +1448,7 @@ $('gateForm').addEventListener('submit', async e => {
     } else if (err && err.message === 'no vault') {
       showGate('create');
     } else {
-      say(m, 'تعذر قراءة بيانات الدفتر. جرّب مرة أخرى، أو استعد نسخة احتياطية.', 'err');
+      say(m, 'تعذر قراءة بيانات الدفتر. جرّب مرة أخرى، أو استعد نسخة احتياطية.' + (err && err.code ? ' [' + err.code + ']' : ''), 'err');
     }
   } finally { setGateBusy(false); }
 });
@@ -1616,7 +1619,7 @@ async function boot() {
     const docs = await listAll();
     showGate(docs.has('meta') || legacyRaw() ? 'unlock' : 'create');
   } catch (e) {
-    showGate('unlock', 'تعذر الوصول إلى التخزين. تحقق من الاتصال ثم أعد تحميل الصفحة.', 'err');
+    showGate('unlock', 'تعذر الوصول إلى التخزين. تحقق من الاتصال ثم أعد تحميل الصفحة.' + (e && e.code ? ' [' + e.code + ']' : ''), 'err');
   }
 }
 // 'load' waits for the Firebase scripts (deferred), so the cloud check sees them.
